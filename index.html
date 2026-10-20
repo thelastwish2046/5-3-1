@@ -1,0 +1,1504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Strength Cycle Planner</title>
+  <meta name="description" content="Minimalist strength cycle calculator and training planner with document checklist progression, PDF and Excel export." />
+  <meta property="og:title" content="Strength Cycle Planner" />
+  <meta property="og:description" content="Minimalist strength cycle calculator and training planner with document checklist progression, PDF and Excel export." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Google Fonts: JetBrains Mono & Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- PDF export: jsPDF + autoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <!-- Excel export: ExcelJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #000000;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --dim: #71717a;
+      --faint: #27272a;
+      --red: #ef4444;
+      --red-hover: #f87171;
+      --green: #10b981;
+      --green-hover: #34d399;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --font-sans: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    ::selection {
+      background: #ffffff;
+      color: #000000;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font-mono);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      position: relative;
+    }
+
+    /* Fixed ambient starfield */
+    #starCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 0;
+      background: #000000;
+    }
+
+    /* Content wrapper */
+    .app-root {
+      position: relative;
+      z-index: 10;
+      width: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+    }
+
+    .app-root.program-active {
+      max-width: 760px;
+    }
+
+    /* Checklist elements */
+    .checklist-flow {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .step-answered {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 0.85rem;
+      cursor: pointer;
+      user-select: none;
+      padding: 0.15rem 0;
+      transition: color 0.15s ease;
+      animation: slideUpShort 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .step-answered:hover {
+      color: #ffffff;
+    }
+
+    .step-answered .ans-left {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .step-answered .ans-val {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .step-answered .btn-change {
+      font-size: 0.72rem;
+      color: var(--dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .step-answered:hover .btn-change {
+      color: var(--muted);
+    }
+
+    /* Active question container (no outer borderlines) */
+    .step-active {
+      padding-top: 0.25rem;
+      animation: fadeInDown 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    .step-active .step-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .step-active .step-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.01em;
+    }
+
+    .step-active .btn-back {
+      font-size: 0.75rem;
+      color: var(--dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+    }
+
+    .step-active .btn-back:hover {
+      color: var(--text);
+    }
+
+    .options-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      padding-left: 0.25rem;
+    }
+
+    /* Document checklist item */
+    .checklist-row {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      padding: 0.25rem 0;
+      color: #d4d4d8;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.88rem;
+      transition: color 0.15s ease;
+    }
+
+    .checklist-row:hover {
+      color: #ffffff;
+    }
+
+    .checklist-row.selected {
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .checkbox-box {
+      width: 14px;
+      height: 14px;
+      border: 1px solid #71717a;
+      background: transparent;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s ease;
+    }
+
+    .checklist-row:hover .checkbox-box {
+      border-color: #d4d4d8;
+    }
+
+    .checklist-row.selected .checkbox-box {
+      background: #ffffff;
+      border-color: #ffffff;
+      color: #000000;
+    }
+
+    .checkbox-box svg {
+      width: 10px;
+      height: 10px;
+      stroke: currentColor;
+      stroke-width: 3.5;
+      fill: none;
+      display: none;
+    }
+
+    .checklist-row.selected .checkbox-box svg {
+      display: block;
+    }
+
+    /* Direct Input field */
+    .input-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding-top: 0.25rem;
+      padding-left: 0.25rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+
+    .input-row input {
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid #71717a;
+      color: #ffffff;
+      font-family: inherit;
+      font-size: 0.95rem;
+      padding: 0.2rem 0.3rem;
+      width: 105px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    .input-row input:focus {
+      border-bottom-color: #ffffff;
+    }
+
+    .btn-enter {
+      background: #ffffff;
+      color: #000000;
+      border: none;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.25rem 0.5rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+
+    .btn-enter:hover:not(:disabled) {
+      background: #e4e4e7;
+    }
+
+    .btn-enter:disabled {
+      opacity: 0.25;
+      cursor: not-allowed;
+    }
+
+    /* Saved lifts tracker */
+    .saved-tracker {
+      margin-bottom: 1rem;
+      font-size: 0.78rem;
+      color: var(--dim);
+    }
+
+    .saved-tracker .tracker-item {
+      color: #d4d4d8;
+      margin-top: 0.2rem;
+    }
+
+    /* Result program view (without outer borderlines) */
+    .program-view {
+      width: 100%;
+      animation: fadeIn 0.3s ease forwards;
+    }
+
+    .top-action-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--faint);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.8rem;
+    }
+
+    .btn-restart {
+      background: transparent;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.8rem;
+      transition: color 0.15s;
+    }
+
+    .btn-restart:hover {
+      color: #ffffff;
+    }
+
+    .plan-info {
+      color: var(--dim);
+    }
+
+    /* Lift tabs */
+    .lift-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      border-bottom: 1px solid #18181b;
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--dim);
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      padding-bottom: 0.25rem;
+      transition: color 0.15s;
+    }
+
+    .tab-btn:hover {
+      color: #ffffff;
+    }
+
+    .tab-btn.active {
+      color: #ffffff;
+      font-weight: 800;
+      border-bottom: 1px solid #ffffff;
+    }
+
+    /* Stats row (borderless) */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .metric-col .metric-lbl {
+      font-size: 0.72rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.25rem;
+    }
+
+    .metric-col .metric-val {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: #ffffff;
+      letter-spacing: -0.02em;
+    }
+
+    /* Tables (borderless outer) */
+    .section-wrap {
+      margin-bottom: 2.5rem;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .section-head h3 {
+      font-size: 0.88rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: #ffffff;
+    }
+
+    .section-head .sub {
+      font-size: 0.72rem;
+      color: var(--dim);
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.85rem;
+    }
+
+    th {
+      font-size: 0.72rem;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 500;
+      padding: 0.4rem 0.6rem;
+      border-bottom: 1px solid #27272a;
+    }
+
+    th:first-child, td:first-child {
+      padding-left: 0;
+    }
+
+    td {
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid #18181b;
+      color: #d4d4d8;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    td.load-col {
+      color: #ffffff;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    tr.fsl-row td {
+      color: #71717a;
+    }
+
+    tr.fsl-row td.load-col {
+      color: #a1a1aa;
+      font-weight: 400;
+    }
+
+    .rep-badge {
+      display: inline-block;
+      background: #ffffff;
+      color: #000000;
+      font-weight: 800;
+      padding: 0 4px;
+      font-size: 0.78rem;
+    }
+
+    .week-block {
+      margin-bottom: 2rem;
+    }
+
+    .week-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      border-bottom: 1px solid #18181b;
+      padding-bottom: 0.35rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .week-head h4 {
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: #f4f4f5;
+      text-transform: uppercase;
+    }
+
+    .week-head .week-purpose {
+      font-size: 0.7rem;
+      color: var(--dim);
+    }
+
+    /* Export buttons: Red PDF & Green Excel */
+    .export-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid #18181b;
+      font-size: 0.8rem;
+    }
+
+    .btn-pdf {
+      color: var(--red);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.15s;
+    }
+
+    .btn-pdf:hover:not(:disabled) {
+      color: var(--red-hover);
+    }
+
+    .btn-excel {
+      color: var(--green);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-decoration: underline;
+      text-underline-offset: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: color 0.15s;
+    }
+
+    .btn-excel:hover:not(:disabled) {
+      color: var(--green-hover);
+    }
+
+    .export-row button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .export-sep {
+      color: #3f3f46;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Keyframe Animations */
+    @keyframes fadeInDown {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slideUpShort {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Background Starfield Canvas -->
+  <canvas id="starCanvas"></canvas>
+
+  <!-- Single Container Root -->
+  <div class="app-root" id="appRoot">
+    <!-- Checklist Wizard View -->
+    <div id="wizardView">
+      <div id="savedTracker" class="saved-tracker hidden"></div>
+      <div id="answeredContainer" class="checklist-flow"></div>
+      <div id="activeStepContainer"></div>
+    </div>
+
+    <!-- Program Result View -->
+    <div id="programView" class="program-view hidden">
+      <div class="top-action-bar">
+        <button type="button" class="btn-restart" id="btnRestart">&larr; Start over</button>
+        <span class="plan-info" id="planInfo"></span>
+      </div>
+
+      <div class="lift-tabs hidden" id="liftTabs"></div>
+
+      <div class="metrics-row">
+        <div class="metric-col">
+          <div class="metric-lbl">Estimated 1RM</div>
+          <div class="metric-val" id="val1RM">--</div>
+        </div>
+        <div class="metric-col">
+          <div class="metric-lbl">Training Max (90%)</div>
+          <div class="metric-val" id="valTM">--</div>
+        </div>
+        <div class="metric-col">
+          <div class="metric-lbl">Next Cycle Target</div>
+          <div class="metric-val" id="valNextTM">--</div>
+        </div>
+      </div>
+
+      <div class="section-wrap">
+        <div class="section-head">
+          <h3>Warm-up Protocol</h3>
+          <span class="sub">Every session</span>
+        </div>
+        <div class="table-responsive" id="warmupTableWrap"></div>
+      </div>
+
+      <div class="section-wrap">
+        <div class="section-head">
+          <h3>4-Week Program Cycle</h3>
+          <span class="sub" id="programCycleSub">Main Sets</span>
+        </div>
+        <div id="weeksContainer"></div>
+      </div>
+
+      <div class="export-row">
+        <button type="button" class="btn-pdf" id="btnExportPdf">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Download PDF</span>
+        </button>
+        <span class="export-sep">&bull;</span>
+        <button type="button" class="btn-excel" id="btnExportExcel">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M8 13h2"/><path d="M8 17h2"/><path d="M14 13h2"/><path d="M14 17h2"/></svg>
+          <span>Download Excel</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    /* ==========================================================================
+       1. STARFIELD BACKGROUND ENGINE
+       ========================================================================== */
+    const canvas = document.getElementById('starCanvas');
+    const ctx = canvas.getContext('2d');
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const starCount = Math.floor((width * height) / 8000);
+    const stars = [];
+
+    for (let i = 0; i < starCount; i++) {
+      const baseAlpha = 0.2 + Math.random() * 0.7;
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        radius: Math.random() < 0.85 ? 0.7 + Math.random() * 0.5 : 1.3 + Math.random() * 0.7,
+        baseAlpha: baseAlpha,
+        twinkleSpeed: 0.006 + Math.random() * 0.02,
+        twinklePhase: Math.random() * Math.PI * 2
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    let t = 0;
+    function renderStars() {
+      t += 1;
+      ctx.clearRect(0, 0, width, height);
+      for (let i = 0; i < stars.length; i++) {
+        const s = stars[i];
+        const alpha = Math.max(0.1, Math.min(1, s.baseAlpha + Math.sin(t * s.twinkleSpeed + s.twinklePhase) * (s.baseAlpha * 0.35)));
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      requestAnimationFrame(renderStars);
+    }
+    renderStars();
+
+    /* ==========================================================================
+       2. 5/3/1 CALCULATOR CORE LOGIC
+       ========================================================================== */
+    const ALL_LIFTS = ['Squat', 'Deadlift', 'Bench Press', 'Overhead Press'];
+
+    const INCREMENTS = {
+      kg:  [{ v: 2.5, l: '2.5 kg' }, { v: 1.25, l: '1.25 kg' }, { v: 5, l: '5 kg' }],
+      lbs: [{ v: 5, l: '5 lbs' }, { v: 2.5, l: '2.5 lbs' }, { v: 10, l: '10 lbs' }]
+    };
+
+    const WEEKS_DEF = [
+      { title: "Week 1: 5s Week", purpose: "Build Work Capacity",
+        sets: [[0.65, "5"], [0.75, "5"], [0.85, "5+"]], fslPct: 0.65 },
+      { title: "Week 2: 3s Week", purpose: "Increase Intensity",
+        sets: [[0.70, "3"], [0.80, "3"], [0.90, "3+"]], fslPct: 0.70 },
+      { title: "Week 3: 5/3/1 Week", purpose: "Heaviest Main Work",
+        sets: [[0.75, "5"], [0.85, "3"], [0.95, "1+"]], fslPct: 0.75 },
+      { title: "Week 4: Deload Week", purpose: "Reduce Fatigue & Recovery",
+        sets: [[0.40, "5"], [0.50, "5"], [0.60, "5"]], fslPct: 0 }
+    ];
+
+    const WARMUPS_DEF = [
+      { pct: 0.40, reps: 5, label: "Warm-up Set 1" },
+      { pct: 0.50, reps: 5, label: "Warm-up Set 2" },
+      { pct: 0.60, reps: 3, label: "Warm-up Set 3" }
+    ];
+
+    function roundToIncrement(val, inc) {
+      return Number((Math.round(val / inc) * inc).toFixed(4));
+    }
+
+    function fmt(n) {
+      return String(Number(n.toFixed(2)));
+    }
+
+    function calculateProgram(config, settings) {
+      const { lift, unit, mode, primary, inc } = config;
+      const reps = Math.min(15, Math.max(1, config.reps || 5));
+      const fslCount = settings.beginner === 'yes' ? 0 : parseInt(settings.volume, 10);
+
+      let oneRM, trainingMax;
+      if (mode === '1rm') {
+        oneRM = primary;
+        trainingMax = oneRM * 0.90;
+      } else if (mode === 'est') {
+        oneRM = primary * (1 + reps / 30);
+        trainingMax = oneRM * 0.90;
+      } else {
+        trainingMax = primary;
+        oneRM = trainingMax / 0.90;
+      }
+
+      const isLower = (lift === 'Squat' || lift === 'Deadlift');
+      const jump = isLower ? (unit === 'kg' ? 5 : 10) : (unit === 'kg' ? 2.5 : 5);
+      const nextTM = trainingMax + jump;
+
+      const loadNum = pct => roundToIncrement(trainingMax * pct, inc);
+      const loadStr = n => `${fmt(n)} ${unit}`;
+
+      const warmups = WARMUPS_DEF.map(w => {
+        const n = loadNum(w.pct);
+        return {
+          label: w.label,
+          pctText: `${Math.round(w.pct * 100)}%`,
+          load: loadStr(n),
+          reps: w.reps,
+          rawLoad: n
+        };
+      });
+
+      const weeks = WEEKS_DEF.map(w => {
+        const rows = w.sets.map(([pct, r], i) => {
+          const n = loadNum(pct);
+          return {
+            label: `Set ${i + 1}`,
+            pctText: `${Math.round(pct * 100)}% TM`,
+            reps: r,
+            load: loadStr(n),
+            rawLoad: n,
+            rawReps: r,
+            isFsl: false,
+            isPlus: r.includes('+')
+          };
+        });
+
+        if (fslCount > 0 && w.fslPct > 0) {
+          const n = loadNum(w.fslPct);
+          for (let i = 1; i <= fslCount; i++) {
+            rows.push({
+              label: `FSL Set ${i}`,
+              pctText: `${Math.round(w.fslPct * 100)}% TM`,
+              reps: '5',
+              load: loadStr(n),
+              rawLoad: n,
+              rawReps: '5',
+              isFsl: true,
+              isPlus: false
+            });
+          }
+        }
+
+        return { title: w.title, purpose: w.purpose, rows };
+      });
+
+      return {
+        liftName: lift, unit, inc, fslCount,
+        oneRM: loadStr(oneRM), trainingMax: loadStr(trainingMax), nextTM: loadStr(nextTM),
+        oneRMn: Number(oneRM.toFixed(2)), tmN: Number(trainingMax.toFixed(2)), nextTMn: Number(nextTM.toFixed(2)),
+        warmups, weeks
+      };
+    }
+
+    /* ==========================================================================
+       3. DOCUMENT CHECKLIST WIZARD STATE & RENDERING
+       ========================================================================== */
+    let globalSettings = { beginner: 'no', volume: '5' };
+    let savedLiftConfigs = [];
+    let currentLift = { lift: '', unit: 'kg', mode: '1rm', primary: 0, reps: 5, inc: 2.5 };
+    let answers = {};
+    let activeStepIdx = 0;
+    let builtPrograms = [];
+    let activeProgramIdx = 0;
+
+    function getSteps() {
+      const available = ALL_LIFTS.filter(l => !savedLiftConfigs.some(c => c.lift === l));
+      const steps = [];
+
+      steps.push({
+        id: 'lift',
+        title: 'Which lift?',
+        type: 'checklist',
+        options: available.map(l => ({ v: l, l: l }))
+      });
+
+      steps.push({
+        id: 'unit',
+        title: 'Weight unit?',
+        type: 'checklist',
+        options: [{ v: 'kg', l: 'kg' }, { v: 'lbs', l: 'lbs' }]
+      });
+
+      steps.push({
+        id: 'mode',
+        title: 'Starting from?',
+        type: 'checklist',
+        options: [
+          { v: '1rm', l: 'True 1RM' },
+          { v: 'est', l: 'Estimated 1RM (Weight × Reps)' },
+          { v: 'tm',  l: 'Training Max (TM)' }
+        ]
+      });
+
+      const curMode = currentLift.mode || answers['mode'] || '1rm';
+      let wTitle = '1RM weight?';
+      if (curMode === 'est') wTitle = 'Weight lifted?';
+      else if (curMode === 'tm') wTitle = 'Training Max weight?';
+
+      steps.push({
+        id: 'primary',
+        title: wTitle,
+        type: 'input',
+        suffix: currentLift.unit || answers['unit'] || 'kg',
+        placeholder: (currentLift.unit || answers['unit']) === 'lbs' ? 'e.g. 225' : 'e.g. 100'
+      });
+
+      if (curMode === 'est') {
+        steps.push({
+          id: 'reps',
+          title: 'Reps completed?',
+          type: 'input',
+          suffix: 'reps',
+          placeholder: 'e.g. 5'
+        });
+      }
+
+      const curUnit = currentLift.unit || answers['unit'] || 'kg';
+      steps.push({
+        id: 'inc',
+        title: 'Smallest weight jump?',
+        type: 'checklist',
+        options: INCREMENTS[curUnit].map(o => ({ v: String(o.v), l: o.l }))
+      });
+
+      if (savedLiftConfigs.length === 0) {
+        steps.push({
+          id: 'beginner',
+          title: 'Beginner?',
+          type: 'checklist',
+          options: [{ v: 'no', l: 'No (with FSL)' }, { v: 'yes', l: 'Yes (main sets only)' }]
+        });
+
+        const isBeg = (answers['beginner'] || globalSettings.beginner) === 'yes';
+        if (!isBeg) {
+          steps.push({
+            id: 'volume',
+            title: 'Back-off volume?',
+            type: 'checklist',
+            options: [{ v: '5', l: '5 × 5 FSL' }, { v: '3', l: '3 × 5 FSL' }]
+          });
+        }
+      }
+
+      if (savedLiftConfigs.length < ALL_LIFTS.length - 1) {
+        steps.push({
+          id: 'another',
+          title: 'Add another lift?',
+          type: 'checklist',
+          options: [{ v: 'no', l: 'No (Generate Program)' }, { v: 'yes', l: 'Yes' }]
+        });
+      }
+
+      return steps;
+    }
+
+    function formatAnswerDisplay(id) {
+      const v = answers[id];
+      if (v === undefined || v === '') return '';
+      if (id === 'lift' || id === 'unit') return v;
+      if (id === 'mode') {
+        if (v === '1rm') return 'True 1RM';
+        if (v === 'est') return 'Estimated 1RM';
+        return 'Training Max';
+      }
+      if (id === 'primary') return `${v} ${currentLift.unit || answers.unit || 'kg'}`;
+      if (id === 'reps') return `${v} reps`;
+      if (id === 'inc') return `${v} ${currentLift.unit || answers.unit || 'kg'}`;
+      if (id === 'beginner') return v === 'yes' ? 'Yes' : 'No';
+      if (id === 'volume') return `${v} × 5 FSL`;
+      if (id === 'another') return v === 'yes' ? 'Yes' : 'No';
+      return String(v);
+    }
+
+    function renderWizard() {
+      const steps = getSteps();
+      const answeredContainer = document.getElementById('answeredContainer');
+      const activeStepContainer = document.getElementById('activeStepContainer');
+      const savedTracker = document.getElementById('savedTracker');
+
+      // 1. Saved lifts tracker
+      if (savedLiftConfigs.length > 0) {
+        savedTracker.classList.remove('hidden');
+        savedTracker.innerHTML = `
+          <div>Configured lifts:</div>
+          ${savedLiftConfigs.map(c => `<div class="tracker-item">&check; ${c.lift} (${c.primary} ${c.unit})</div>`).join('')}
+        `;
+      } else {
+        savedTracker.classList.add('hidden');
+      }
+
+      // 2. Answered steps (moving upward stack)
+      let answeredHtml = '';
+      for (let i = 0; i < activeStepIdx; i++) {
+        const st = steps[i];
+        if (!st || answers[st.id] === undefined) continue;
+        answeredHtml += `
+          <div class="step-answered" data-step-idx="${i}">
+            <div class="ans-left">
+              <span style="display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; background:#fff; color:#000; font-size:10px; font-weight:800;">&check;</span>
+              <span>${st.title} <span class="ans-val">${formatAnswerDisplay(st.id)}</span></span>
+            </div>
+            <button type="button" class="btn-change">change</button>
+          </div>
+        `;
+      }
+      answeredContainer.innerHTML = answeredHtml;
+
+      answeredContainer.querySelectorAll('.step-answered').forEach(el => {
+        el.addEventListener('click', () => {
+          activeStepIdx = Number(el.dataset.stepIdx);
+          renderWizard();
+        });
+      });
+
+      // 3. Current Active Step (no borderlines, appears smoothly underneath)
+      const currentStep = steps[activeStepIdx];
+      if (!currentStep) return;
+
+      let fieldHtml = '';
+      if (currentStep.type === 'checklist') {
+        fieldHtml = `
+          <div class="options-list">
+            ${currentStep.options.map(opt => {
+              const isSelected = answers[currentStep.id] === opt.v;
+              return `
+                <div class="checklist-row ${isSelected ? 'selected' : ''}" data-val="${opt.v}">
+                  <div class="checkbox-box">
+                    <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  </div>
+                  <span>${opt.l}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      } else if (currentStep.type === 'input') {
+        fieldHtml = `
+          <div class="input-row">
+            <input id="stepNumInput" type="number" step="${currentStep.id === 'primary' ? '0.5' : '1'}" min="1" ${currentStep.id === 'reps' ? 'max="20"' : ''} placeholder="${currentStep.placeholder}" value="${answers[currentStep.id] || ''}">
+            <span>${currentStep.suffix}</span>
+            <button type="button" class="btn-enter" id="btnEnter">enter &crarr;</button>
+          </div>
+        `;
+      }
+
+      activeStepContainer.innerHTML = `
+        <div class="step-active">
+          <div class="step-header">
+            <span class="step-title">${currentStep.title}</span>
+            ${activeStepIdx > 0 ? `<button type="button" class="btn-back" id="btnBack">back</button>` : ''}
+          </div>
+          ${fieldHtml}
+        </div>
+      `;
+
+      if (document.getElementById('btnBack')) {
+        document.getElementById('btnBack').addEventListener('click', () => {
+          activeStepIdx = Math.max(0, activeStepIdx - 1);
+          renderWizard();
+        });
+      }
+
+      // Event handlers for selection / input
+      if (currentStep.type === 'checklist') {
+        activeStepContainer.querySelectorAll('.checklist-row').forEach(row => {
+          row.addEventListener('click', () => {
+            const chosen = row.dataset.val;
+            onSelectOption(currentStep.id, chosen);
+          });
+        });
+      } else if (currentStep.type === 'input') {
+        const inp = document.getElementById('stepNumInput');
+        const btn = document.getElementById('btnEnter');
+
+        const validate = () => {
+          const val = parseFloat(inp.value);
+          btn.disabled = !(val > 0);
+        };
+        inp.addEventListener('input', validate);
+        validate();
+
+        const submitInput = () => {
+          const val = parseFloat(inp.value);
+          if (val > 0) {
+            onSubmitInput(currentStep.id, val);
+          }
+        };
+
+        inp.addEventListener('keydown', e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submitInput();
+          }
+        });
+
+        btn.addEventListener('click', submitInput);
+        inp.focus();
+      }
+    }
+
+    function onSelectOption(stepId, val) {
+      answers[stepId] = val;
+
+      if (stepId === 'lift') {
+        currentLift.lift = val;
+      } else if (stepId === 'unit') {
+        currentLift.unit = val;
+        currentLift.inc = (val === 'kg' ? 2.5 : 5);
+        answers['inc'] = String(currentLift.inc);
+      } else if (stepId === 'mode') {
+        currentLift.mode = val;
+      } else if (stepId === 'inc') {
+        currentLift.inc = parseFloat(val);
+      } else if (stepId === 'beginner') {
+        globalSettings.beginner = val;
+      } else if (stepId === 'volume') {
+        globalSettings.volume = val;
+      }
+
+      // Smooth step advance
+      setTimeout(() => advance(stepId, val), 160);
+    }
+
+    function onSubmitInput(stepId, num) {
+      answers[stepId] = num;
+      if (stepId === 'primary') {
+        currentLift.primary = num;
+      } else if (stepId === 'reps') {
+        currentLift.reps = num;
+      }
+      setTimeout(() => advance(stepId, String(num)), 160);
+    }
+
+    function advance(stepId, chosen) {
+      if (stepId === 'another') {
+        if (chosen === 'yes') {
+          savedLiftConfigs.push({
+            lift: currentLift.lift || answers.lift,
+            unit: currentLift.unit || answers.unit || 'kg',
+            mode: currentLift.mode || answers.mode || '1rm',
+            primary: currentLift.primary || answers.primary || 100,
+            reps: currentLift.reps || answers.reps || 5,
+            inc: currentLift.inc || parseFloat(answers.inc) || 2.5
+          });
+
+          currentLift = {
+            lift: '',
+            unit: answers.unit || 'kg',
+            mode: '1rm',
+            primary: 0,
+            reps: 5,
+            inc: parseFloat(answers.inc) || 2.5
+          };
+          answers = { unit: currentLift.unit, inc: String(currentLift.inc) };
+          activeStepIdx = 0;
+          renderWizard();
+          return;
+        } else {
+          finishWizard();
+          return;
+        }
+      }
+
+      const steps = getSteps();
+      const curIdx = steps.findIndex(s => s.id === stepId);
+      if (curIdx >= 0 && curIdx < steps.length - 1) {
+        activeStepIdx = curIdx + 1;
+        renderWizard();
+      } else {
+        finishWizard();
+      }
+    }
+
+    function finishWizard() {
+      const finalConfig = {
+        lift: currentLift.lift || answers.lift || 'Squat',
+        unit: currentLift.unit || answers.unit || 'kg',
+        mode: currentLift.mode || answers.mode || '1rm',
+        primary: currentLift.primary || answers.primary || 100,
+        reps: currentLift.reps || answers.reps || 5,
+        inc: currentLift.inc || parseFloat(answers.inc) || 2.5
+      };
+
+      const allConfigs = [...savedLiftConfigs, finalConfig];
+      builtPrograms = allConfigs.map(c => calculateProgram(c, globalSettings));
+      activeProgramIdx = 0;
+      showProgramView();
+    }
+
+    /* ==========================================================================
+       4. PROGRAM RESULTS VIEW RENDERING
+       ========================================================================== */
+    function showProgramView() {
+      document.getElementById('wizardView').classList.add('hidden');
+      document.getElementById('programView').classList.remove('hidden');
+      document.getElementById('appRoot').classList.add('program-active');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      renderProgram();
+    }
+
+    function renderProgram() {
+      const p = builtPrograms[activeProgramIdx];
+      if (!p) return;
+
+      document.getElementById('planInfo').textContent = p.fslCount > 0
+        ? `5/3/1 with FSL (${p.fslCount} \u00d7 5)`
+        : 'Basic 5/3/1 (Main sets only)';
+
+      // Lift tabs if multiple
+      const tabs = document.getElementById('liftTabs');
+      if (builtPrograms.length > 1) {
+        tabs.classList.remove('hidden');
+        tabs.innerHTML = builtPrograms.map((prg, i) =>
+          `<button type="button" class="tab-btn ${i === activeProgramIdx ? 'active' : ''}" data-idx="${i}">${prg.liftName}</button>`
+        ).join('');
+        tabs.querySelectorAll('.tab-btn').forEach(btn => {
+          btn.addEventListener('click', () => {
+            activeProgramIdx = Number(btn.dataset.idx);
+            renderProgram();
+          });
+        });
+      } else {
+        tabs.classList.add('hidden');
+      }
+
+      // Metrics
+      document.getElementById('val1RM').textContent = p.oneRM;
+      document.getElementById('valTM').textContent = p.trainingMax;
+      document.getElementById('valNextTM').textContent = p.nextTM;
+
+      // Warmup table
+      document.getElementById('warmupTableWrap').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Set</th>
+              <th>% TM</th>
+              <th>Load</th>
+              <th>Reps</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${p.warmups.map(w => `
+              <tr>
+                <td>${w.label}</td>
+                <td style="color:#71717a;">${w.pctText}</td>
+                <td class="load-col">${w.load}</td>
+                <td>${w.reps}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      // Weeks tables
+      document.getElementById('programCycleSub').textContent = p.fslCount > 0 ? 'Main Sets & FSL' : 'Main Sets';
+      document.getElementById('weeksContainer').innerHTML = p.weeks.map(w => `
+        <div class="week-block">
+          <div class="week-head">
+            <h4>${w.title}</h4>
+            <span class="week-purpose">${w.purpose}</span>
+          </div>
+          <div class="table-responsive">
+            <table>
+              <thead>
+                <tr>
+                  <th>Set Type</th>
+                  <th>Target %</th>
+                  <th>Reps</th>
+                  <th>Load</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${w.rows.map(r => `
+                  <tr class="${r.isFsl ? 'fsl-row' : ''}">
+                    <td>${r.label}</td>
+                    <td style="color:#71717a;">${r.pctText}</td>
+                    <td>${r.isPlus ? `<span class="rep-badge">${r.reps}</span>` : r.reps}</td>
+                    <td class="load-col">${r.load}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function restartWizard() {
+      savedLiftConfigs = [];
+      builtPrograms = [];
+      answers = {};
+      currentLift = { lift: '', unit: 'kg', mode: '1rm', primary: 0, reps: 5, inc: 2.5 };
+      activeStepIdx = 0;
+      document.getElementById('appRoot').classList.remove('program-active');
+      document.getElementById('programView').classList.add('hidden');
+      document.getElementById('wizardView').classList.remove('hidden');
+      renderWizard();
+    }
+
+    document.getElementById('btnRestart').addEventListener('click', restartWizard);
+
+    /* ==========================================================================
+       5. PDF & EXCEL EXPORTS (Red PDF, Green Excel)
+       ========================================================================== */
+    function exportToPDF() {
+      const jsPDFLib = window.jspdf ? window.jspdf.jsPDF : null;
+      if (!jsPDFLib) {
+        alert('PDF library is not loaded. Please check your internet connection.');
+        return;
+      }
+      if (!builtPrograms.length) return;
+
+      const doc = new jsPDFLib({ unit: 'pt', format: 'a4' });
+      const margin = 40;
+
+      builtPrograms.forEach((p, idx) => {
+        if (idx > 0) doc.addPage();
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(20);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`5/3/1 - ${p.liftName}`, margin, 50);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10.5);
+        doc.setTextColor(80, 80, 80);
+        doc.text(`Est. 1RM: ${p.oneRM}    Training Max: ${p.trainingMax}    Next cycle TM target: ${p.nextTM}`, margin, 72);
+
+        doc.autoTable({
+          startY: 88,
+          head: [['Warm-up (every session)', '% TM', 'Load', 'Reps']],
+          body: p.warmups.map(r => [r.label, r.pctText, r.load, String(r.reps)]),
+          theme: 'striped',
+          margin: { left: margin, right: margin },
+          headStyles: { fillColor: [24, 24, 27], textColor: [255, 255, 255], fontStyle: 'bold' },
+          styles: { fontSize: 9.5, cellPadding: 4 }
+        });
+
+        let lastY = doc.lastAutoTable.finalY + 14;
+        p.weeks.forEach(w => {
+          doc.autoTable({
+            startY: lastY,
+            head: [[w.title, 'Target %', 'Reps', 'Load']],
+            body: w.rows.map(r => [r.label, r.pctText, r.reps, r.load]),
+            theme: 'striped',
+            margin: { left: margin, right: margin },
+            headStyles: { fillColor: [39, 39, 42], textColor: [255, 255, 255], fontStyle: 'bold' },
+            styles: { fontSize: 9.5, cellPadding: 4 },
+            showHead: 'everyPage',
+            rowPageBreak: 'avoid',
+            didParseCell: data => {
+              if (data.section === 'body' && w.rows[data.row.index]?.isFsl) {
+                data.cell.styles.textColor = [110, 110, 110];
+              }
+            }
+          });
+          lastY = doc.lastAutoTable.finalY + 12;
+        });
+
+        const pageH = doc.internal.pageSize.getHeight();
+        const pageW = doc.internal.pageSize.getWidth();
+        const note = '"+" sets: hit the target reps, then add clean reps leaving 1-2 in reserve. ' +
+          (p.fslCount > 0 ? `FSL = First Set Last (${p.fslCount}x5 back-off). ` : '') +
+          `Loads rounded to nearest ${fmt(p.inc)} ${p.unit}.`;
+        doc.setFontSize(8.5);
+        doc.setTextColor(120, 120, 120);
+        const lines = doc.splitTextToSize(note, pageW - margin * 2);
+        if (lastY + lines.length * 11 > pageH - margin) { doc.addPage(); lastY = margin; }
+        doc.text(lines, margin, lastY + 4);
+      });
+
+      const filenames = builtPrograms.map(p => p.liftName.replace(/\s+/g, '_')).join('-');
+      doc.save(`531_${filenames}.pdf`);
+    }
+
+    async function exportToExcel() {
+      const ExcelJSLib = window.ExcelJS;
+      if (!ExcelJSLib) {
+        alert('Excel library is not loaded. Please check your internet connection.');
+        return;
+      }
+      if (!builtPrograms.length) return;
+
+      const wb = new ExcelJSLib.Workbook();
+      wb.creator = 'Strength Cycle Planner';
+      wb.created = new Date();
+
+      builtPrograms.forEach(p => {
+        const ws = wb.addWorksheet(p.liftName, {
+          views: [{ showGridLines: true }],
+          pageSetup: {
+            paperSize: 9, orientation: 'landscape',
+            fitToPage: true, fitToWidth: 1, fitToHeight: 1,
+            horizontalCentered: true,
+            margins: { left: 0.4, right: 0.4, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 }
+          }
+        });
+
+        const FONT = 'Arial';
+        const C = { navy: 'FF000000', blue: 'FF18181B', ink: 'FF111827', mute: 'FF4B5563', line: 'FF71717A', fsl: 'FFF4F4F5', plus: 'FFFEF08A', input: 'FFFFF59D', grey: 'FFE4E4E7', white: 'FFFFFFFF' };
+        const thin = { style: 'thin', color: { argb: C.line } };
+        const box = { top: thin, left: thin, bottom: thin, right: thin };
+        const fill = argb => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
+        const font = (o = {}) => Object.assign({ name: FONT, size: 11, color: { argb: C.ink } }, o);
+        const kgFmt = `General" ${p.unit}"`;
+
+        [16, 12, 9, 13, 14, 3, 16, 12, 9, 13, 14].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+        const LAST = 11;
+
+        const put = (r, c, v, o = {}) => {
+          const cell = ws.getCell(r, c);
+          cell.value = v;
+          cell.font = o.font || font();
+          if (o.fill) cell.fill = fill(o.fill);
+          cell.alignment = o.align || { vertical: 'middle', horizontal: 'center' };
+          if (o.border !== false) cell.border = box;
+          if (o.fmt) cell.numFmt = o.fmt;
+          return cell;
+        };
+
+        const band = (r, c1, c2, v, o = {}) => {
+          ws.mergeCells(r, c1, r, c2);
+          put(r, c1, v, o);
+          for (let c = c1 + 1; c <= c2; c++) {
+            ws.getCell(r, c).border = o.border === false ? {} : box;
+            if (o.fill) ws.getCell(r, c).fill = fill(o.fill);
+          }
+        };
+
+        // Title
+        band(1, 1, LAST, `5/3/1  -  ${p.liftName}`, {
+          fill: C.navy, border: false,
+          font: font({ size: 18, bold: true, color: { argb: C.white } }),
+          align: { vertical: 'middle', horizontal: 'left', indent: 1 }
+        });
+        ws.getRow(1).height = 34;
+
+        const plan = p.fslCount > 0 ? `Main sets + FSL (${p.fslCount} x 5 back-off sets)` : 'Basic 5/3/1 - main sets only, no FSL';
+        band(2, 1, LAST, `${plan}   |   Loads rounded to ${fmt(p.inc)} ${p.unit}   |   Yellow cells = record completed reps`, {
+          border: false, font: font({ size: 11, bold: true, color: { argb: C.mute } }),
+          align: { vertical: 'middle', horizontal: 'left', indent: 1 }
+        });
+        ws.getRow(2).height = 22;
+        ws.getRow(3).height = 6;
+
+        // Metrics
+        const metric = (c1, c2, label, value) => {
+          band(4, c1, c2, label, { fill: C.grey, font: font({ size: 9.5, bold: true, color: { argb: C.mute } }) });
+          ws.mergeCells(5, c1, 5, c2);
+          put(5, c1, value, { font: font({ size: 16, bold: true, color: { argb: C.navy } }), fmt: kgFmt });
+          for (let c = c1 + 1; c <= c2; c++) ws.getCell(5, c).border = box;
+        };
+        metric(1, 2, 'ESTIMATED 1RM', p.oneRMn);
+        metric(3, 5, 'TRAINING MAX (90%)', p.tmN);
+        metric(7, LAST, 'NEXT CYCLE TM TARGET', p.nextTMn);
+        ws.getRow(4).height = 18;
+        ws.getRow(5).height = 28;
+        ws.getRow(6).height = 6;
+
+        // Warm-up (left) + how to log (right)
+        band(7, 1, 5, 'WARM-UP (every session)', { fill: C.navy, font: font({ size: 11, bold: true, color: { argb: C.white } }) });
+        ['Set', '% TM', 'Reps', 'Load', 'Done'].forEach((h, i) =>
+          put(8, 1 + i, h, { fill: C.blue, font: font({ bold: true, color: { argb: C.white } }) }));
+        p.warmups.forEach((w, i) => {
+          const r = 9 + i;
+          put(r, 1, w.label, { align: { vertical: 'middle', horizontal: 'left', indent: 1 }, font: font({ bold: true }) });
+          put(r, 2, w.pctText);
+          put(r, 3, w.reps);
+          put(r, 4, w.rawLoad, { fmt: kgFmt, font: font({ bold: true, color: { argb: C.navy } }) });
+          put(r, 5, '', { fill: C.grey });
+        });
+
+        band(7, 7, LAST, 'HOW TO LOG', { fill: C.navy, font: font({ size: 11, bold: true, color: { argb: C.white } }) });
+        const tips = [
+          'Complete the target reps, then keep going on the "+" set leaving 1-2 reps in reserve.',
+          'Type your actual reps completed in the yellow cells.',
+          'Use grey cells to check off or log notes for other sets.',
+          `Next cycle: raise TM to ${p.nextTM} and run the 4-week cycle again.`
+        ];
+        tips.forEach((t, i) => {
+          band(8 + i, 7, LAST, t, { font: font({ size: 10 }), align: { vertical: 'middle', horizontal: 'left', indent: 1, wrapText: true } });
+        });
+        for (let r = 8; r <= 11; r++) ws.getRow(r).height = 20;
+        ws.getRow(12).height = 8;
+
+        // Weeks
+        const writeWeek = (w, c0, r0) => {
+          band(r0, c0, c0 + 4, `${w.title}  -  ${w.purpose}`, { fill: C.navy, font: font({ size: 11, bold: true, color: { argb: C.white } }), align: { vertical: 'middle', horizontal: 'left', indent: 1 } });
+          ['Set', 'Target', 'Reps', 'Load', 'Reps done'].forEach((h, i) =>
+            put(r0 + 1, c0 + i, h, { fill: C.blue, font: font({ bold: true, color: { argb: C.white } }) }));
+          w.rows.forEach((row, i) => {
+            const r = r0 + 2 + i;
+            const base = row.isFsl ? C.fsl : (row.isPlus ? C.plus : C.white);
+            put(r, c0, row.label, { fill: base, align: { vertical: 'middle', horizontal: 'left', indent: 1 }, font: font({ bold: true }) });
+            put(r, c0 + 1, row.pctText, { fill: base });
+            put(r, c0 + 2, row.rawReps, { fill: base, font: font({ bold: row.isPlus, size: row.isPlus ? 12 : 11 }) });
+            put(r, c0 + 3, row.rawLoad, { fill: base, fmt: kgFmt, font: font({ bold: !row.isFsl, color: { argb: row.isFsl ? C.ink : C.navy } }) });
+            const done = put(r, c0 + 4, null, { fill: row.isPlus ? C.input : C.grey, font: font({ bold: true, size: 11 }) });
+            done.dataValidation = {
+              type: 'whole', operator: 'between',
+              formulae: [0, 99],
+              allowBlank: true, showErrorMessage: true,
+              errorTitle: 'Reps', error: 'Enter a whole number of reps.'
+            };
+            if (row.isPlus) {
+              const m = { style: 'medium', color: { argb: C.navy } };
+              done.border = { top: m, left: m, bottom: m, right: m };
+            }
+            ws.getRow(r).height = 20;
+          });
+          ws.getRow(r0).height = 22;
+          ws.getRow(r0 + 1).height = 20;
+          return r0 + 2 + w.rows.length;
+        };
+
+        let r = 13;
+        for (let i = 0; i < 4; i += 2) {
+          const endA = writeWeek(p.weeks[i], 1, r);
+          const endB = writeWeek(p.weeks[i + 1], 7, r);
+          r = Math.max(endA, endB);
+          ws.getRow(r).height = 10;
+          r += 1;
+        }
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const filenames = builtPrograms.map(p => p.liftName.replace(/\s+/g, '_')).join('-');
+      a.download = `531_${filenames}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    document.getElementById('btnExportPdf').addEventListener('click', exportToPDF);
+    document.getElementById('btnExportExcel').addEventListener('click', exportToExcel);
+
+    // Initial render
+    renderWizard();
+  </script>
+</body>
+</html>
